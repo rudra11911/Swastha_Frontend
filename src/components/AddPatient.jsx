@@ -15,6 +15,10 @@ function Patient({ addPatientToRoom, dialogOpen, setDialogOpen }) {
     dateOfBirth: "",
     sex: "",
     room: "",
+    // New fields
+    bloodGroup: "",
+    age: "",
+    physicalActivity: ""
   });
   const [searchDisease, setSearchDisease] = useState("");
   const [selectedDiseases, setSelectedDiseases] = useState([]);
@@ -37,6 +41,12 @@ function Patient({ addPatientToRoom, dialogOpen, setDialogOpen }) {
     { name: "Scarlet Fever", score: 30 },
     { name: "Strep-Smith-MacMahan Syndrome", score: 40 },
   ];
+
+  // Blood group options
+  const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+  
+  // Physical activity levels
+  const activityLevels = ["Sedentary", "Light", "Moderate", "Active", "Very Active"];
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -64,6 +74,9 @@ function Patient({ addPatientToRoom, dialogOpen, setDialogOpen }) {
       dateOfBirth: "",
       sex: "",
       room: "",
+      bloodGroup: "",
+      age: "",
+      physicalActivity: ""
     });
     setSelectedDiseases([]);
     setSearchDisease("");
@@ -107,7 +120,11 @@ function Patient({ addPatientToRoom, dialogOpen, setDialogOpen }) {
             <Input name="lastName" placeholder="Last Name" value={patient.lastName} onChange={handleInputChange} required />
           </div>
           <Input name="patientId" placeholder="Patient ID" value={patient.patientId} onChange={handleInputChange} required />
-          <Input type="date" name="dateOfBirth" value={patient.dateOfBirth} onChange={handleInputChange} required />
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input type="date" name="dateOfBirth" value={patient.dateOfBirth} onChange={handleInputChange} required />
+            <Input type="number" name="age" placeholder="Age" min="0" max="120" value={patient.age} onChange={handleInputChange} />
+          </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Select Gender</label>
@@ -126,6 +143,46 @@ function Patient({ addPatientToRoom, dialogOpen, setDialogOpen }) {
               >
                 Female
               </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Blood Group</label>
+              <Select 
+                value={patient.bloodGroup} 
+                onValueChange={(value) => setPatient({ ...patient, bloodGroup: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select blood group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {bloodGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Physical Activity</label>
+              <Select 
+                value={patient.physicalActivity} 
+                onValueChange={(value) => setPatient({ ...patient, physicalActivity: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select activity level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activityLevels.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {level}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
