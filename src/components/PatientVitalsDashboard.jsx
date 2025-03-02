@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Activity, ThermometerSun, Heart, Droplet, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Brain, AlertTriangle, FileCheck } from 'lucide-react';
 
-
 const PatientVitalsDashboard = () => {
-  // Sample patient data - in a real app,
-  //  this would come from an API
+  const ws = useRef(null);
+  // Sample patient data
   const [patient, setPatient] = useState({
     id: "1",
     name: "Rudra Pratap",
@@ -16,19 +15,11 @@ const PatientVitalsDashboard = () => {
     attendingPhysician: "Dr. Sahil Goyat"
   });
 
-  // Sample vital signs history data
-  const [vitalHistory, setVitalHistory] = useState([
-    { time: '08:00', heartRate: 72, systolic: 120, diastolic: 80, temperature: 37.0, respRate: 16, spo2: 98, pain: 2 },
-    { time: '10:00', heartRate: 75, systolic: 122, diastolic: 78, temperature: 37.1, respRate: 18, spo2: 97, pain: 3 },
-    { time: '12:00', heartRate: 78, systolic: 125, diastolic: 82, temperature: 37.3, respRate: 17, spo2: 96, pain: 4 },
-    { time: '14:00', heartRate: 82, systolic: 128, diastolic: 84, temperature: 37.5, respRate: 18, spo2: 95, pain: 5 },
-    { time: '16:00', heartRate: 79, systolic: 124, diastolic: 83, temperature: 37.2, respRate: 16, spo2: 97, pain: 3 },
-    { time: '18:00', heartRate: 74, systolic: 118, diastolic: 79, temperature: 37.0, respRate: 15, spo2: 98, pain: 2 },
-    { time: '20:00', heartRate: 70, systolic: 116, diastolic: 76, temperature: 36.8, respRate: 14, spo2: 99, pain: 1 },
-  ]);
-
-  // Current vital signs (most recent readings)
-  const currentVitals = vitalHistory[vitalHistory.length - 1];
+  // Current vital signs (from WebSocket)
+  const [currentVitals, setCurrentVitals] = useState(null);
+  
+  // Vital signs history data (will be updated from WebSocket)
+  const [vitalHistory, setVitalHistory] = useState([]);
 
   // Sample AI-generated diet recommendations
   const [dietRecommendations, setDietRecommendations] = useState([
@@ -56,6 +47,77 @@ const PatientVitalsDashboard = () => {
     pendingItems: ["Final blood work", "Physical therapy assessment", "Medication reconciliation"]
   });
 
+  useEffect(() => {
+    const connectWebSocket = () => {
+      console.log('Connecting to WebSocket...');
+      ws.current = new WebSocket('ws://localhost:5173/ws');
+
+      ws.current.onopen = () => {
+        console.log('Connected to WebSocket');
+      };
+
+      ws.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received:', data);
+          if (data.vitals && data.vitals.length > 0) {
+            const newVital = data.vitals[0];
+            
+            // Format the data to match our dashboard format
+            const formattedVital = {
+              time: new Date(newVital.timestamp).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}),
+              heartRate: newVital.heartRate,
+              systolic: newVital.bloodPressure.systolic,
+              diastolic: newVital.bloodPressure.diastolic,
+              temperature: newVital.bodyTemperature,
+              respRate: newVital.respiratoryRate,
+              spo2: newVital.oxygenSaturation,
+              pain: newVital.painLevel,
+              glucose: newVital.glucose
+            };
+            
+            // Update current vitals
+            setCurrentVitals(formattedVital);
+            
+            // Add to history (limited to last 10 readings)
+            setVitalHistory(prevHistory => {
+              const newHistory = [formattedVital, ...prevHistory];
+              return newHistory.slice(0, 10); // Keep only the last 10 readings
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket data:', error);
+        }
+      };
+
+      ws.current.onclose = () => {
+        console.warn('WebSocket disconnected, retrying in 3 seconds...');
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        ws.current.close();
+      };
+    };
+
+    connectWebSocket();
+
+    // Initialize with some dummy data to avoid errors before first WebSocket message
+    if (vitalHistory.length === 0) {
+      setVitalHistory([
+        { time: '08:00', heartRate: 72, systolic: 120, diastolic: 80, temperature: 37.0, respRate: 16, spo2: 98, pain: 2, glucose: 110 }
+      ]);
+      setCurrentVitals({ time: '08:00', heartRate: 72, systolic: 120, diastolic: 80, temperature: 37.0, respRate: 16, spo2: 98, pain: 2, glucose: 110 });
+    }
+
+    return () => {
+      if (ws.current) {
+        ws.current.close();
+      }
+    };
+  }, []);
+
   // Function to determine status color based on value and normal range
   const getStatusColor = (value, type) => {
     const ranges = {
@@ -65,6 +127,7 @@ const PatientVitalsDashboard = () => {
       temperature: { low: 36.5, high: 37.5 },
       respRate: { low: 12, high: 20 },
       spo2: { low: 95, high: 100 },
+      glucose: { low: 70, high: 140 },
     };
 
     if (!ranges[type]) return 'text-gray-700';
@@ -92,8 +155,27 @@ const PatientVitalsDashboard = () => {
     }
   };
 
+  // If no data yet, show loading
+  if (!currentVitals) {
+    return (
+      <div className="bg-gray-50 p-4 min-h-screen flex items-center justify-center">
+        <div className="text-xl font-semibold text-gray-600">
+          Connecting to patient vitals... Please wait.
+        </div>
+      </div>
+    );
+  }
+
+  // Sort history to show newest first in charts but oldest first in table
+  const sortedHistoryForCharts = [...vitalHistory].reverse();
+
   return (
     <div className="bg-gray-50 p-4 min-h-screen">
+      {/* WebSocket Connection Status */}
+      <div className={`fixed top-2 right-2 px-3 py-1 rounded-full text-white text-xs ${ws.current && ws.current.readyState === 1 ? 'bg-green-500' : 'bg-red-500'}`}>
+        {ws.current && ws.current.readyState === 1 ? 'Live' : 'Reconnecting...'}
+      </div>
+      
       {/* Header with patient info */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
         <div className="flex flex-wrap justify-between items-center">
@@ -136,7 +218,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vitalHistory} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <LineChart data={sortedHistoryForCharts} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                 <Line type="monotone" dataKey="heartRate" stroke="#ef4444" strokeWidth={2} dot={false} />
                 <XAxis dataKey="time" hide={true} />
                 <YAxis hide={true} domain={['dataMin - 10', 'dataMax + 10']} />
@@ -160,7 +242,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vitalHistory} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <LineChart data={sortedHistoryForCharts} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                 <Line type="monotone" dataKey="systolic" stroke="#3b82f6" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="diastolic" stroke="#93c5fd" strokeWidth={2} dot={false} />
                 <XAxis dataKey="time" hide={true} />
@@ -184,7 +266,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vitalHistory} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <LineChart data={sortedHistoryForCharts} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                 <Line type="monotone" dataKey="temperature" stroke="#f97316" strokeWidth={2} dot={false} />
                 <XAxis dataKey="time" hide={true} />
                 <YAxis hide={true} domain={[36, 38]} />
@@ -198,7 +280,7 @@ const PatientVitalsDashboard = () => {
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
-              <Heart className="text-indigo-500" size={24} />
+              <Droplet className="text-indigo-500" size={24} />
               <h3 className="font-medium">Oxygen Saturation</h3>
             </div>
             <span className={`text-2xl font-bold ${getStatusColor(currentVitals.spo2, 'spo2')}`}>
@@ -207,7 +289,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={vitalHistory} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <AreaChart data={sortedHistoryForCharts} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                 <Area type="monotone" dataKey="spo2" stroke="#6366f1" fill="#c7d2fe" fillOpacity={0.5} />
                 <XAxis dataKey="time" hide={true} />
                 <YAxis hide={true} domain={[90, 100]} />
@@ -233,7 +315,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={vitalHistory} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <BarChart data={sortedHistoryForCharts} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="time" />
                 <YAxis domain={[10, 25]} />
@@ -257,7 +339,7 @@ const PatientVitalsDashboard = () => {
           </div>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={vitalHistory} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <BarChart data={sortedHistoryForCharts} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="time" />
                 <YAxis domain={[0, 10]} />
@@ -268,25 +350,25 @@ const PatientVitalsDashboard = () => {
           </div>
         </div>
 
-        {/* All Vitals Trend Card */}
+        {/* Glucose Level Card (New) */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
-              <Clock className="text-purple-500" size={24} />
-              <h3 className="font-medium">Vitals Trends</h3>
+              <AlertCircle className="text-purple-500" size={24} />
+              <h3 className="font-medium">Glucose Level</h3>
             </div>
+            <span className={`text-2xl font-bold ${getStatusColor(currentVitals.glucose, 'glucose')}`}>
+              {currentVitals.glucose} <span className="text-gray-500 text-sm">mg/dL</span>
+            </span>
           </div>
           <div className="h-40">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={vitalHistory} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <LineChart data={sortedHistoryForCharts} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="time" />
-                <YAxis yAxisId="left" orientation="left" stroke="#ef4444" />
-                <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" />
+                <YAxis domain={[60, 180]} />
                 <Tooltip />
-                <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="heartRate" name="Heart Rate" stroke="#ef4444" activeDot={{ r: 8 }} />
-                <Line yAxisId="right" type="monotone" dataKey="systolic" name="Systolic" stroke="#3b82f6" />
+                <Line type="monotone" dataKey="glucose" stroke="#8b5cf6" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -295,7 +377,13 @@ const PatientVitalsDashboard = () => {
 
       {/* Vitals Data Table */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-3">Vitals History</h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold">Vitals History</h3>
+          <div className="flex items-center text-sm text-gray-600">
+            <Clock size={14} className="mr-1" />
+            Last updated: {currentVitals.time}
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -307,18 +395,19 @@ const PatientVitalsDashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resp. Rate</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SpO2</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pain</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Glucose</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {vitalHistory.slice().reverse().map((record, index) => (
+              {vitalHistory.map((record, index) => (
                 <tr key={index} className={index === 0 ? "bg-blue-50" : ""}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.time}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`${getStatusColor(record.heartRate, 'heartRate')}`}>
                       {record.heartRate} bpm 
-                      {index > 0 && record.heartRate > vitalHistory[vitalHistory.length - 1 - index].heartRate && 
+                      {index > 0 && record.heartRate > vitalHistory[index-1].heartRate && 
                         <ArrowUpCircle size={16} className="inline ml-1 text-red-500" />}
-                      {index > 0 && record.heartRate < vitalHistory[vitalHistory.length - 1 - index].heartRate && 
+                      {index > 0 && record.heartRate < vitalHistory[index-1].heartRate && 
                         <ArrowDownCircle size={16} className="inline ml-1 text-blue-500" />}
                     </span>
                   </td>
@@ -354,6 +443,11 @@ const PatientVitalsDashboard = () => {
                         ></div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span className={`${getStatusColor(record.glucose, 'glucose')}`}>
+                      {record.glucose} mg/dL
+                    </span>
                   </td>
                 </tr>
               ))}
