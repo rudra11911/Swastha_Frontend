@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Activity, ThermometerSun, Heart, Droplet, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Activity, ThermometerSun, Heart, Droplet, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Brain, AlertTriangle, FileCheck } from 'lucide-react';
+
 
 const PatientVitalsDashboard = () => {
-  // Sample patient data - in a real app, this would come from an API
+  // Sample patient data - in a real app,
+  //  this would come from an API
   const [patient, setPatient] = useState({
     id: "1",
     name: "Rudra Pratap",
@@ -27,6 +29,32 @@ const PatientVitalsDashboard = () => {
 
   // Current vital signs (most recent readings)
   const currentVitals = vitalHistory[vitalHistory.length - 1];
+
+  // Sample AI-generated diet recommendations
+  const [dietRecommendations, setDietRecommendations] = useState([
+    "High protein meals to support recovery",
+    "Increased fluid intake (2-3L daily)",
+    "Low sodium options for blood pressure management",
+    "Balanced fiber intake for digestive health",
+    "Regular small meals throughout the day"
+  ]);
+
+  // Sample AI-generated limitations
+  const [patientLimitations, setPatientLimitations] = useState([
+    "Avoid strenuous physical activity for 2 weeks",
+    "Limited stair climbing (1-2 flights maximum)",
+    "No driving for 72 hours after medication adjustment",
+    "Restricted bending and lifting (nothing >5kg)",
+    "Avoid alcohol and caffeine"
+  ]);
+
+  // Discharge readiness state
+  const [dischargeReadiness, setDischargeReadiness] = useState({
+    score: 98,
+    readyForDischarge: true,
+    estimatedDate: "2025-03-05",
+    pendingItems: ["Final blood work", "Physical therapy assessment", "Medication reconciliation"]
+  });
 
   // Function to determine status color based on value and normal range
   const getStatusColor = (value, type) => {
@@ -53,6 +81,15 @@ const PatientVitalsDashboard = () => {
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return `${diffDays}d ${diffHours}h`;
+  };
+
+  // Handle discharge button click
+  const handleDischargeClick = () => {
+    if (dischargeReadiness.readyForDischarge) {
+      alert("Initiating discharge process for patient " + patient.name);
+    } else {
+      alert("Patient not ready for discharge. Please resolve pending items: " + dischargeReadiness.pendingItems.join(", "));
+    }
   };
 
   return (
@@ -322,6 +359,101 @@ const PatientVitalsDashboard = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Gen AI Footer Section */}
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg shadow-md p-4 mb-4">
+        <div className="flex items-center mb-4">
+          <Brain className="text-purple-600 mr-2" size={24} />
+          <h2 className="text-xl font-bold text-purple-800">AI Care Recommendations</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Diet Recommendations */}
+          <div className="bg-white rounded-lg p-4 shadow">
+            <h3 className="font-medium text-lg mb-3 text-purple-700 flex items-center">
+              <Heart className="text-purple-500 mr-2" size={20} />
+              Recommended Diet
+            </h3>
+            <ul className="space-y-2">
+              {dietRecommendations.map((item, index) => (
+                <li key={index} className="flex items-start">
+                  <div className="flex-shrink-0 h-5 w-5 rounded-full bg-green-100 flex items-center justify-center mt-0.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-green-500"></span>
+                  </div>
+                  <span className="ml-2 text-gray-700">{item}</span>
+                </li>
+              ))}
+            </ul>
+            <button className="mt-4 w-full bg-purple-100 text-purple-700 px-4 py-2 rounded hover:bg-purple-200 flex items-center justify-center">
+              <span>View Full Nutrition Plan</span>
+            </button>
+          </div>
+          
+          {/* Limitations */}
+          <div className="bg-white rounded-lg p-4 shadow">
+            <h3 className="font-medium text-lg mb-3 text-purple-700 flex items-center">
+              <AlertTriangle className="text-orange-500 mr-2" size={20} />
+              Activity Limitations
+            </h3>
+            <ul className="space-y-2">
+              {patientLimitations.map((item, index) => (
+                <li key={index} className="flex items-start">
+                  <div className="flex-shrink-0 h-5 w-5 rounded-full bg-red-100 flex items-center justify-center mt-0.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+                  </div>
+                  <span className="ml-2 text-gray-700">{item}</span>
+                </li>
+              ))}
+            </ul>
+            <button className="mt-4 w-full bg-purple-100 text-purple-700 px-4 py-2 rounded hover:bg-purple-200 flex items-center justify-center">
+              <span>Print Patient Instructions</span>
+            </button>
+          </div>
+          
+          {/* Discharge Readiness */}
+          <div className="bg-white rounded-lg p-4 shadow">
+            <h3 className="font-medium text-lg mb-3 text-purple-700 flex items-center">
+              <FileCheck className="text-blue-500 mr-2" size={20} />
+              Discharge Readiness
+            </h3>
+            <div className="mb-4">
+              <div className="flex justify-between mb-1">
+                <span className="text-gray-700">Readiness Score</span>
+                <span className="font-medium">{dischargeReadiness.score}/100</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="h-2.5 rounded-full" 
+                  style={{
+                    width: `${dischargeReadiness.score}%`,
+                    backgroundColor: dischargeReadiness.score >= 90 ? '#22c55e' : 
+                                    dischargeReadiness.score >= 70 ? '#f59e0b' : '#ef4444'
+                  }}
+                ></div>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600 mb-3">
+              <p className="mb-1"><span className="font-medium">Estimated date:</span> {dischargeReadiness.estimatedDate}</p>
+              <p className="mb-1"><span className="font-medium">Pending items:</span></p>
+              <ul className="list-disc pl-5 text-xs space-y-1">
+                {dischargeReadiness.pendingItems.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <button 
+              onClick={handleDischargeClick}
+              className={`mt-2 w-full px-4 py-2 rounded flex items-center justify-center ${
+                dischargeReadiness.readyForDischarge 
+                  ? "bg-green-600 text-white hover:bg-green-700" 
+                  : "bg-gray-300 text-gray-700 cursor-not-allowed"
+              }`}
+            >
+              <span>Initiate Discharge</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
